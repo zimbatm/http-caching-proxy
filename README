@@ -19,8 +19,6 @@ Support cache invalidation
 
 Server /robots.txt and / directly.
 
-Don't use the Scheme in the S3 path
-
 Support files bigger than 5GB
 
 Use Multi-Part uploads to S3 for big files

@@ -24,6 +24,19 @@ func forward(w http.ResponseWriter, r *http.Response) {
 	io.Copy(w, r.Body)
 }
 
+func copyUrl(origURL *url.URL) (newURL *url.URL) {
+	newURL = new(url.URL)
+	*newURL = *origURL
+	return
+}
+
+func urlToPath(url *url.URL) string {
+	u := copyUrl(url)
+	u.Scheme = ""
+	// Ignore the starting "//" chars
+	return u.String()[2:]
+}
+
 func copyHeader(key string, request *http.Request, response *http.Response) {
 	value := response.Header.Get(key)
 	if value != "" {
@@ -94,44 +107,45 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	}
 
 	bucketUrl := "http://" + self.BucketName + ".s3.amazonaws.com"
-	s3Url := bucketUrl + "/" + url.String()
+	bucketPath := urlToPath(url)
+	s3Url := bucketUrl + "/" + bucketPath
 
-	s3Response, err := s3Head(bucketUrl, url.String(), self.Keys)
+	s3Response, err := s3Head(bucketUrl, bucketPath, self.Keys)
 	if err != nil {
-		log.Println(url, "Error", err)
+		log.Println(bucketPath, "Error", err)
 	}
 
 	// First fetch from cache
 	if s3Response.StatusCode == 200 {
-		log.Println(url, "Cache hit")
+		log.Println(bucketPath, "Cache hit")
 		// TODO: Redirect to signed url
 		http.Redirect(w, req, s3Url, http.StatusMovedPermanently)
 		return
 	} else {
-		log.Println(url, "Cache miss")
+		log.Println(bucketPath, "Cache miss")
 	}
 
 	// Then try upstream
 	upstreamResponse, err := http.Get(url.String())
 	if upstreamResponse.StatusCode != 200 {
-		log.Println(url, "Upstream error")
+		log.Println(bucketPath, "Upstream error")
 		forward(w, upstreamResponse)
 	}
 
 	// Store in cache
-	log.Println(url, "Storing in cache")
-	s3Response, err = s3Put(bucketUrl, url.String(), self.Keys, upstreamResponse)
+	log.Println(bucketPath, "Storing in cache")
+	s3Response, err = s3Put(bucketUrl, bucketPath, self.Keys, upstreamResponse)
 	if err != nil {
-		log.Println(url, "Error", err)
+		log.Println(bucketPath, "Error", err)
 	}
 
 	if s3Response.StatusCode == 200 {
-		log.Println(url, "Cache hit 2")
+		log.Println(bucketPath, "Cache hit 2")
 		http.Redirect(w, req, s3Url, http.StatusFound)
 		return
 	}
 
-	log.Println(url, "S3 store error")
+	log.Println(bucketPath, "S3 store error")
 	forward(w, s3Response)
 }
 
