@@ -12,19 +12,18 @@ heroku config:add AWS_ACCESS_KEY_ID=somekey AWS_SECRET_ACCESS_KEY=some-secret-ke
 git push heroku master
 ```
 
-TODO
-----
+Prossible future improvements
+-----------------------------
 
-Add support for environment variables as setting to avoid exposing the
-AWS keys in the logs.
-
-S3 doesn't support Transfer-Encoding: chunked for upload which is injected
-by Go if the Content-Length header is not set.
+Fix file uploads with no Content-Length. Go uses a chunked encoding which
+is not supported by S3.
 
 Support cache invalidation
 
+Server /robots.txt and / directly.
+
 Don't use the Scheme in the S3 path
 
-Use Multi-Part uploads for big files
+Use Multi-Part uploads to S3 for big files
 
-Add signed urls support to S3
+Add support for redirects to S3 signed urls

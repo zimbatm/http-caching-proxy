@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -111,10 +112,10 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 func main() {
 	cache := new(CachingHandler)
 
-	flag.StringVar(&ServerAddr, "addr", ":8080", "HTTP [host]:port on which to listen")
-	flag.StringVar(&cache.BucketName, "bucket", "", "S3 bucket where to cache the files")
-	flag.StringVar(&cache.Keys.AccessKey, "access-key", "", "S3 access key ID")
-	flag.StringVar(&cache.Keys.SecretKey, "secret-key", "", "S3 secret key")
+	flag.StringVar(&ServerAddr, "addr", ":8080", "HTTP [host]:port on which to listen.")
+	flag.StringVar(&cache.BucketName, "bucket", os.Getenv("S3_BUCKET_NAME"), "S3 bucket where to cache the files. ENV: S3_BUCKET_NAME")
+	flag.StringVar(&cache.Keys.AccessKey, "access-key", os.Getenv("AWS_ACCESS_KEY_ID"), "S3 access key ID. ENV: AWS_ACCESS_KEY_ID")
+	flag.StringVar(&cache.Keys.SecretKey, "secret-key", os.Getenv("AWS_SECRET_ACCESS_KEY"), "S3 secret key. ENV: AWS_SECRET_ACCESS_KEY")
 	flag.Parse()
 
 	server := &http.Server{
