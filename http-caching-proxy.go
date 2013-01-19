@@ -1,7 +1,6 @@
 package main
 
 import (
-	"./httplog"
 	"flag"
 	"github.com/kr/s3"
 	"io"
@@ -72,40 +71,40 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 
 	s3Response, err := s3Head(s3Url, self.Keys)
 	if err != nil {
-		log.Println("Error", err)
+		log.Println(url, "Error", err)
 	}
 
 	// First fetch from cache
 	if s3Response.StatusCode == 200 {
-		log.Println("Cache hit")
+		log.Println(url, "Cache hit")
 		// TODO: Redirect to signed url
 		http.Redirect(w, req, s3Url, 302)
 		return
 	} else {
-		log.Println("Cache miss")
+		log.Println(url, "Cache miss")
 	}
 
 	// Then try upstream
 	upstreamResponse, err := http.Get(url.String())
 	if upstreamResponse.StatusCode != 200 {
-		log.Println("Upstream error")
+		log.Println(url, "Upstream error")
 		forward(w, upstreamResponse)
 	}
 
 	// Store in cache
-	log.Println("Storing in cache")
+	log.Println(url, "Storing in cache")
 	s3Response, err = s3Put(s3Url, self.Keys, upstreamResponse)
 	if err != nil {
-		log.Println("Error", err)
+		log.Println(url, "Error", err)
 	}
 
 	if s3Response.StatusCode == 200 {
-		log.Println("Cache hit 2")
+		log.Println(url, "Cache hit 2")
 		http.Redirect(w, req, s3Url, 302)
 		return
 	}
 
-	log.Println("S3 store error")
+	log.Println(url, "S3 store error")
 	forward(w, s3Response)
 }
 
@@ -118,11 +117,9 @@ func main() {
 	flag.StringVar(&cache.Keys.SecretKey, "secret-key", "", "S3 secret key")
 	flag.Parse()
 
-	requestLogger := httplog.NewRequestLogger(cache)
-
 	server := &http.Server{
 		Addr:    ServerAddr,
-		Handler: requestLogger,
+		Handler: cache,
 	}
 
 	log.Println(cache)
