@@ -33,6 +33,7 @@ func copyUrl(origURL *url.URL) (newURL *url.URL) {
 func urlToPath(url *url.URL) string {
 	u := copyUrl(url)
 	u.Scheme = ""
+	u.User = nil
 	// Ignore the starting "//" chars
 	return u.String()[2:]
 }

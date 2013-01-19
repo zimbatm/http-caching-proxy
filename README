@@ -17,6 +17,8 @@ Prossible future improvements
 
 Support cache invalidation
 
+Add basic auth to access the proxy
+
 Server /robots.txt and / directly.
 
 Support files bigger than 5GB
