@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/kr/s3"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -30,22 +31,46 @@ func copyHeader(key string, request *http.Request, response *http.Response) {
 	}
 }
 
-func s3Head(url string, keys s3.Keys) (*http.Response, error) {
+func s3Head(bucket, path string, keys s3.Keys) (*http.Response, error) {
+	url := bucket + "/" + path
 	r, _ := http.NewRequest("HEAD", url, nil)
 	r.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	s3.Sign(r, keys)
 	return http.DefaultClient.Do(r)
 }
 
-func s3Put(url string, keys s3.Keys, resp *http.Response) (*http.Response, error) {
-	r, _ := http.NewRequest("PUT", url, resp.Body)
+func s3Put(bucket, path string, keys s3.Keys, resp *http.Response) (*http.Response, error) {
+	url := bucket + "/" + path
+	input := resp.Body
+	contentLenght := resp.ContentLength
 
-	//copyHeader("Content-Type", r, resp)
-	r.ContentLength = resp.ContentLength
+	// S3 doesn't support chunked encodings on upload
+	if resp.ContentLength < 0 {
+		tmpdir := os.TempDir()
+		tmpfile, _ := ioutil.TempFile(tmpdir, "upload")
+		defer tmpfile.Close()
+		defer os.Remove(tmpfile.Name())
+
+		log.Println(path, "Storing upstream to ", tmpfile.Name())
+
+		io.Copy(tmpfile, resp.Body)
+		tmpfile.Seek(0, 0)
+		tmpfileInfo, _ := os.Stat(tmpfile.Name())
+
+		input = tmpfile
+		contentLenght = tmpfileInfo.Size()
+	}
+
+	r, _ := http.NewRequest("PUT", url, input)
+	r.ContentLength = contentLenght
+
+	copyHeader("Content-Type", r, resp)
 
 	r.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 
 	s3.Sign(r, keys)
+
+	log.Println(path, "Cache push. Size:", contentLenght)
 
 	return http.DefaultClient.Do(r)
 }
@@ -68,9 +93,10 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	s3Url := "http://" + self.BucketName + ".s3.amazonaws.com/" + url.String()
+	bucketUrl := "http://" + self.BucketName + ".s3.amazonaws.com"
+	s3Url := bucketUrl + "/" + url.String()
 
-	s3Response, err := s3Head(s3Url, self.Keys)
+	s3Response, err := s3Head(bucketUrl, url.String(), self.Keys)
 	if err != nil {
 		log.Println(url, "Error", err)
 	}
@@ -79,7 +105,7 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	if s3Response.StatusCode == 200 {
 		log.Println(url, "Cache hit")
 		// TODO: Redirect to signed url
-		http.Redirect(w, req, s3Url, 302)
+		http.Redirect(w, req, s3Url, http.StatusMovedPermanently)
 		return
 	} else {
 		log.Println(url, "Cache miss")
@@ -94,14 +120,14 @@ func (self *CachingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 
 	// Store in cache
 	log.Println(url, "Storing in cache")
-	s3Response, err = s3Put(s3Url, self.Keys, upstreamResponse)
+	s3Response, err = s3Put(bucketUrl, url.String(), self.Keys, upstreamResponse)
 	if err != nil {
 		log.Println(url, "Error", err)
 	}
 
 	if s3Response.StatusCode == 200 {
 		log.Println(url, "Cache hit 2")
-		http.Redirect(w, req, s3Url, 302)
+		http.Redirect(w, req, s3Url, http.StatusFound)
 		return
 	}
 
@@ -123,7 +149,9 @@ func main() {
 		Handler: cache,
 	}
 
-	log.Println(cache)
+	log.Println("S3 access:", cache.Keys.AccessKey)
+	log.Println("S3 bucket:", cache.BucketName)
+	log.Println("Server listening on:", ServerAddr)
 
 	log.Fatal(server.ListenAndServe())
 }

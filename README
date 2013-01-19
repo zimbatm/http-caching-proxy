@@ -15,14 +15,13 @@ git push heroku master
 Prossible future improvements
 -----------------------------
 
-Fix file uploads with no Content-Length. Go uses a chunked encoding which
-is not supported by S3.
-
 Support cache invalidation
 
 Server /robots.txt and / directly.
 
 Don't use the Scheme in the S3 path
+
+Support files bigger than 5GB
 
 Use Multi-Part uploads to S3 for big files
 
